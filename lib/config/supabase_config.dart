@@ -1,10 +1,14 @@
 class SupabaseConfig {
-  // *** THAY BẰNG CREDENTIALS CỦA BẠN ***
-  // Lấy từ: Supabase Dashboard → Settings → API
-  static const String url = 'https://ngeokjanljxsdeesmsrw.supabase.co';
-  static const String anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5nZW9ramFubGp4c2RlZXNtc3J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNDEzMTYsImV4cCI6MjA4NzkxNzMxNn0.Z5Nh4P3T7ZPeSbnhZ2KX9D_wmu_z0Iu3W6GkoRy1kzQ';
+  // Người dùng tự điền khi tạo Supabase project (free)
+  // Hoặc dùng --dart-define khi build
+  static const String url = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: '',
+  );
+  static const String anonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue: '',
+  );
 
-  // Để bảo mật hơn khi build, dùng --dart-define:
-  // static String get url => const String.fromEnvironment('SUPABASE_URL');
-  // static String get anonKey => const String.fromEnvironment('SUPABASE_ANON_KEY');
+  static bool get isConfigured => url.isNotEmpty && anonKey.isNotEmpty;
 }

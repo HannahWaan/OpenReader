@@ -8,6 +8,7 @@ import '../../providers/theme_provider.dart';
 import '../../providers/library_provider.dart';
 import '../../models/book.dart';
 import 'reader_settings_sheet.dart';
+import 'scan_reader_view.dart';
 
 class ReaderScreen extends ConsumerStatefulWidget {
   final String bookId;
@@ -38,12 +39,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   void _saveProgress(Book book) {
     if (_totalPages > 0) {
-      final progress = _currentPage / _totalPages;
       ref.read(libraryProvider.notifier).updateBook(Book(
         id: book.id, title: book.title, author: book.author,
         coverPath: book.coverPath, filePath: book.filePath, type: book.type,
         totalPages: _totalPages, currentPage: _currentPage,
-        progress: progress, status: ReadingStatus.reading,
+        progress: _currentPage / _totalPages, status: ReadingStatus.reading,
         tags: book.tags, rating: book.rating,
         createdAt: book.createdAt, updatedAt: DateTime.now()));
     }
@@ -61,18 +61,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         body: Center(child: Text('Khong tim thay sach', style: TextStyle(color: rt.text))));
     }
 
-    final file = File(book.filePath);
-    final fileExists = file.existsSync();
+    final fileExists = File(book.filePath).existsSync();
 
     return Scaffold(
       backgroundColor: rt.background,
       body: GestureDetector(
         onTap: () => setState(() => _showUI = !_showUI),
         child: Stack(children: [
-          // ═══ PDF VIEWER ═══
+          // ═══ CONTENT ═══
           if (book.type == BookType.pdf && fileExists)
-            PdfViewer.file(
-              book.filePath,
+            PdfViewer.file(book.filePath,
               controller: _pdfController,
               params: PdfViewerParams(
                 backgroundColor: rt.background,
@@ -87,31 +85,20 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 onViewerReady: (document, controller) {
                   setState(() {
                     _totalPages = document.pages.length;
-                    if (book.currentPage > 1) {
-                      controller.goToPage(pageNumber: book.currentPage);
-                    }
+                    if (book.currentPage > 1) controller.goToPage(pageNumber: book.currentPage);
                   });
-                },
-              ),
-            )
-          // ═══ FILE KHONG TON TAI ═══
+                }))
+          else if (book.type == BookType.scan && fileExists)
+            ScanReaderView(filePath: book.filePath, theme: rt,
+              fontSize: ts.fontSize, lineHeight: ts.lineHeight, fontFamily: ts.fontFamily)
           else if (!fileExists)
             Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.error_outline, size: 64, color: rt.secondaryText),
               const SizedBox(height: 16),
-              Text('Khong tim thay file', style: TextStyle(color: rt.text, fontSize: 18)),
-              const SizedBox(height: 8),
-              Padding(padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(book.filePath, style: TextStyle(color: rt.secondaryText, fontSize: 12),
-                  textAlign: TextAlign.center))]))
-          // ═══ PLACEHOLDER ═══
+              Text('Khong tim thay file', style: TextStyle(color: rt.text, fontSize: 18))]))
           else
-            Center(child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: ts.marginH),
-              child: Text('${book.type.name.toUpperCase()} reader\nse ho tro o Phase tiep theo.',
-                style: TextStyle(fontFamily: ts.fontFamily, fontSize: ts.fontSize,
-                  height: ts.lineHeight, color: rt.text),
-                textAlign: TextAlign.center))),
+            Center(child: Text('${book.type.name.toUpperCase()} - Phase tiep theo',
+              style: TextStyle(color: rt.text, fontSize: 18))),
 
           // ═══ TOP BAR ═══
           if (_showUI) Positioned(top: 0, left: 0, right: 0,
@@ -136,7 +123,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               child: SafeArea(child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  if (_totalPages > 0)
+                  if (_totalPages > 0 && book.type == BookType.pdf)
                     SliderTheme(
                       data: SliderTheme.of(context).copyWith(
                         activeTrackColor: rt.text.withValues(alpha: 0.7),
@@ -152,8 +139,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                           _pdfController.goToPage(pageNumber: page);
                         })),
                   Row(children: [
-                    Text('$_currentPage / $_totalPages${_totalPages > 0 ? '  (${(_currentPage / _totalPages * 100).toInt()}%)' : ''}',
-                      style: TextStyle(color: rt.secondaryText, fontSize: 12)),
+                    if (book.type == BookType.pdf && _totalPages > 0)
+                      Text('$_currentPage / $_totalPages  (${(_currentPage / _totalPages * 100).toInt()}%)',
+                        style: TextStyle(color: rt.secondaryText, fontSize: 12)),
                     const Spacer(),
                     IconButton(icon: Icon(Icons.text_fields, color: rt.text),
                       onPressed: () => showModalBottomSheet(context: context,

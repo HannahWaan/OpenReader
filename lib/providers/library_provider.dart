@@ -4,21 +4,26 @@ import '../services/database/local_db.dart';
 
 class LibraryNotifier extends StateNotifier<List<Book>> {
   LibraryNotifier() : super([]) { _loadBooks(); }
+
   Future<void> _loadBooks() async {
     final db = await LocalDatabase.instance;
     final rows = await db.query('books', orderBy: 'updated_at DESC');
     state = rows.map((r) => Book.fromMap(r)).toList();
   }
+
   Future<void> addBook(Book book) async {
     final db = await LocalDatabase.instance;
     await db.insert('books', book.toMap());
     state = [book, ...state];
   }
+
   Future<void> updateBook(Book book) async {
     final db = await LocalDatabase.instance;
-    await db.update('books', book.toMap(), where: 'id = ?', whereArgs: [book.id]);
+    await db.update('books', book.toMap(),
+      where: 'id = ?', whereArgs: [book.id]);
     state = state.map((b) => b.id == book.id ? book : b).toList();
   }
+
   Future<void> deleteBook(String id) async {
     final db = await LocalDatabase.instance;
     await db.delete('books', where: 'id = ?', whereArgs: [id]);
@@ -26,4 +31,6 @@ class LibraryNotifier extends StateNotifier<List<Book>> {
   }
 }
 
-final libraryProvider = StateNotifierProvider<LibraryNotifier, List<Book>>((ref) => LibraryNotifier());
+final libraryProvider = StateNotifierProvider<LibraryNotifier, List<Book>>(
+  (ref) => LibraryNotifier(),
+);

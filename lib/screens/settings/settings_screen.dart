@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/sync/sync_service.dart';
+import '../../services/export/export_service.dart';
+import '../../services/backup/backup_service.dart';
 import '../../config/supabase_config.dart';
+import '../stats/stats_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -16,6 +20,7 @@ class SettingsScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
+          // --- Appearance ---
           _sectionHeader(theme, 'Appearance'),
           ListTile(
             leading: const Icon(Icons.brightness_6),
@@ -32,13 +37,82 @@ class SettingsScreen extends ConsumerWidget {
                 ref.read(themeProvider.notifier).setThemeMode(modes.first);
               },
               showSelectedIcon: false,
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
+              style: ButtonStyle(visualDensity: VisualDensity.compact, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
             ),
           ),
+
           const Divider(),
+
+          // --- Reading Stats ---
+          _sectionHeader(theme, 'Reading'),
+          ListTile(
+            leading: const Icon(Icons.bar_chart),
+            title: const Text('Reading Stats'),
+            subtitle: const Text('View your reading progress and history'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StatsScreen())),
+          ),
+
+          const Divider(),
+
+          // --- Data ---
+          _sectionHeader(theme, 'Data'),
+          ListTile(
+            leading: const Icon(Icons.download),
+            title: const Text('Export Highlights (Markdown)'),
+            onTap: () async {
+              try {
+                final path = await ExportService.exportMarkdown();
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Exported to: $path')));
+              } catch (e) {
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.table_chart),
+            title: const Text('Export Highlights (CSV)'),
+            onTap: () async {
+              try {
+                final path = await ExportService.exportCsv();
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Exported to: $path')));
+              } catch (e) {
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.backup),
+            title: const Text('Create Backup'),
+            subtitle: const Text('Save all data to JSON file'),
+            onTap: () async {
+              try {
+                final path = await BackupService.createBackup();
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Backup saved: $path')));
+              } catch (e) {
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.restore),
+            title: const Text('Restore Backup'),
+            subtitle: const Text('Import from JSON backup file'),
+            onTap: () async {
+              try {
+                final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['json']);
+                if (result == null || result.files.single.path == null) return;
+                final count = await BackupService.restoreBackup(result.files.single.path!);
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Restored $count items')));
+              } catch (e) {
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+              }
+            },
+          ),
+
+          const Divider(),
+
+          // --- Cloud Sync ---
           _sectionHeader(theme, 'Cloud Sync'),
           if (!SupabaseConfig.isConfigured)
             const ListTile(
@@ -48,68 +122,37 @@ class SettingsScreen extends ConsumerWidget {
             )
           else ...[
             ListTile(
-              leading: Icon(
-                SyncService.isLoggedIn ? Icons.cloud_done : Icons.cloud_outlined,
-                color: SyncService.isLoggedIn ? Colors.green : null,
-              ),
-              title: Text(SyncService.isLoggedIn
-                  ? 'Logged in as ${SyncService.currentUser?.email ?? "user"}'
-                  : 'Not logged in'),
-              subtitle: Text(SyncService.isLoggedIn
-                  ? 'Your data syncs across devices'
-                  : 'Sign in to sync highlights, vocabulary & progress'),
+              leading: Icon(SyncService.isLoggedIn ? Icons.cloud_done : Icons.cloud_outlined, color: SyncService.isLoggedIn ? Colors.green : null),
+              title: Text(SyncService.isLoggedIn ? 'Logged in as ${SyncService.currentUser?.email ?? "user"}' : 'Not logged in'),
+              subtitle: Text(SyncService.isLoggedIn ? 'Your data syncs across devices' : 'Sign in to sync data'),
             ),
             if (!SyncService.isLoggedIn)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: FilledButton.icon(
-                  onPressed: () => _showAuthDialog(context),
-                  icon: const Icon(Icons.login),
-                  label: const Text('Sign In / Sign Up'),
-                ),
+                child: FilledButton.icon(onPressed: () => _showAuthDialog(context), icon: const Icon(Icons.login), label: const Text('Sign In / Sign Up')),
               )
-            else ...[
+            else
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => _syncNow(context),
-                        icon: const Icon(Icons.sync),
-                        label: const Text('Sync Now'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton(
-                      onPressed: () async {
-                        await SyncService.signOut();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Logged out')),
-                          );
-                        }
-                      },
-                      child: const Text('Logout'),
-                    ),
-                  ],
-                ),
+                child: Row(children: [
+                  Expanded(child: FilledButton.icon(onPressed: () => _syncNow(context), icon: const Icon(Icons.sync), label: const Text('Sync Now'))),
+                  const SizedBox(width: 12),
+                  OutlinedButton(onPressed: () async {
+                    await SyncService.signOut();
+                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Logged out')));
+                  }, child: const Text('Logout')),
+                ]),
               ),
-            ],
           ],
+
           const Divider(),
+
+          // --- About ---
           _sectionHeader(theme, 'About'),
-          const ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text('OpenReader'),
-            subtitle: Text('v1.2.0 — Free & Open Source Book Reader'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.code),
-            title: const Text('Source Code'),
-            subtitle: const Text('github.com/HannahWaan/OpenReader'),
-            onTap: () {},
-          ),
+          const ListTile(leading: Icon(Icons.info_outline), title: Text('OpenReader'), subtitle: Text('v1.3.0 — Free & Open Source Book Reader')),
+          ListTile(leading: const Icon(Icons.code), title: const Text('Source Code'), subtitle: const Text('github.com/HannahWaan/OpenReader'), onTap: () {}),
+
+          const SizedBox(height: 32),
         ],
       ),
     );
@@ -118,11 +161,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget _sectionHeader(ThemeData theme, String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Text(title,
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: theme.colorScheme.primary,
-            fontWeight: FontWeight.bold,
-          )),
+      child: Text(title, style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -137,65 +176,23 @@ class SettingsScreen extends ConsumerWidget {
   void _showAuthDialog(BuildContext context) {
     final emailCtrl = TextEditingController();
     final passCtrl = TextEditingController();
-
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Cloud Sync'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: emailCtrl,
-              decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: passCtrl,
-              decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
-              obscureText: true,
-            ),
-          ],
-        ),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()), keyboardType: TextInputType.emailAddress),
+          const SizedBox(height: 12),
+          TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()), obscureText: true),
+        ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          OutlinedButton(
-            onPressed: () async {
-              try {
-                await SyncService.signUp(emailCtrl.text.trim(), passCtrl.text);
-                if (ctx.mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Account created! Check email to confirm.')),
-                  );
-                }
-              } catch (e) {
-                if (ctx.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              }
-            },
-            child: const Text('Sign Up'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              try {
-                await SyncService.signIn(emailCtrl.text.trim(), passCtrl.text);
-                if (ctx.mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Logged in!')),
-                  );
-                }
-              } catch (e) {
-                if (ctx.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              }
-            },
-            child: const Text('Sign In'),
-          ),
+          OutlinedButton(onPressed: () async {
+            try { await SyncService.signUp(emailCtrl.text.trim(), passCtrl.text); if (ctx.mounted) { Navigator.pop(ctx); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account created!'))); } } catch (e) { if (ctx.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'))); }
+          }, child: const Text('Sign Up')),
+          FilledButton(onPressed: () async {
+            try { await SyncService.signIn(emailCtrl.text.trim(), passCtrl.text); if (ctx.mounted) { Navigator.pop(ctx); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Logged in!'))); } } catch (e) { if (ctx.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'))); }
+          }, child: const Text('Sign In')),
         ],
       ),
     );
@@ -204,13 +201,9 @@ class SettingsScreen extends ConsumerWidget {
   void _syncNow(BuildContext context) async {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Syncing...')));
     try {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sync complete!')));
-      }
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sync complete!')));
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sync failed: $e')));
-      }
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sync failed: $e')));
     }
   }
 }

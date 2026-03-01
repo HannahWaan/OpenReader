@@ -21,6 +21,21 @@ class Book extends Equatable {
     this.tags = const [], this.rating, required this.createdAt, required this.updatedAt,
     this.isSynced = false});
 
+  Book copyWith({
+    String? id, String? title, String? author, String? coverPath,
+    String? filePath, BookType? type, int? totalPages, int? currentPage,
+    double? progress, ReadingStatus? status, List<String>? tags,
+    int? rating, DateTime? createdAt, DateTime? updatedAt, bool? isSynced,
+  }) => Book(
+    id: id ?? this.id, title: title ?? this.title, author: author ?? this.author,
+    coverPath: coverPath ?? this.coverPath, filePath: filePath ?? this.filePath,
+    type: type ?? this.type, totalPages: totalPages ?? this.totalPages,
+    currentPage: currentPage ?? this.currentPage, progress: progress ?? this.progress,
+    status: status ?? this.status, tags: tags ?? this.tags, rating: rating ?? this.rating,
+    createdAt: createdAt ?? this.createdAt, updatedAt: updatedAt ?? DateTime.now(),
+    isSynced: isSynced ?? this.isSynced,
+  );
+
   Map<String, dynamic> toMap() => {
     'id': id, 'title': title, 'author': author, 'cover_path': coverPath,
     'file_path': filePath, 'type': type.name, 'total_pages': totalPages,
